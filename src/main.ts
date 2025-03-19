@@ -1,4 +1,6 @@
+import { DiscordChannelType } from "./constants";
 import { DiscordEvent, DiscordEventType, DiscordFluxDispatcher } from "./types";
+import { GuildChannelStore, SelectedGuildStore } from "./types/stores";
 
 const NAME = "StickyCategories";
 const LOG_PREFIX = `[${NAME}]`;
@@ -7,6 +9,8 @@ const PARENT_SELECTOR = 'ul[class^="content_"]';
 const CATEGORIES_SELECTOR = '[class*="containerDefault_"][draggable="true"]';
 
 export default class StickyCategories {
+    private _guildChannelStore?: GuildChannelStore;
+    private _selectedGuildStore?: SelectedGuildStore;
     private _fluxDispatcher?: DiscordFluxDispatcher;
     private observer: MutationObserver | null = null;
     private _onEventSubscriptionCb: typeof StickyCategories.prototype._onEvent = this._onEvent.bind(this);
@@ -15,15 +19,75 @@ export default class StickyCategories {
 
     start() {
         console.warn(LOG_PREFIX, "Started");
+        this._guildChannelStore = BdApi.Webpack.getStore<GuildChannelStore>("GuildChannelStore");
+        this._selectedGuildStore = BdApi.Webpack.getStore<SelectedGuildStore>("SelectedGuildStore");
         this._fluxDispatcher = BdApi.Webpack.getByKeys("actionLogger");
 
         this._addCategoriesStyles();
         this._setupObserver();
 
         this._subscribeEvents();
+        this._patchChannelsVirtualScroll();
+    }
+
+    private _patchChannelsVirtualScroll() {
+        const moduleFilter = BdApi.Webpack.Filters.byStrings("sections", "getScrollerState", "getAnchorId");
+        const module = BdApi.Webpack.getModule<Record<string, Function>>((module) =>
+            Object.values<Function>(module).some((subModule) => subModule.length === 1 && moduleFilter(subModule))
+        );
+        const key = module ? Object.keys(module).find((key) => moduleFilter(module[key])) : undefined;
+
+        if (!key) {
+            return console.error(LOG_PREFIX, "Failed to find the module");
+        }
+        BdApi.Patcher.after(NAME, module, key, (_, _args, returnValue) => {
+            const items: Array<{
+                anchorId: string;
+                listIndex: number;
+                offsetTop: number;
+                section: number;
+                type: "header" | "section" | "row" | "footer";
+            }> = returnValue.items;
+            const guildId = this._selectedGuildStore?.getGuildId();
+            if (!items.length || !guildId) return returnValue;
+            const channels = this._guildChannelStore?.getChannels(guildId);
+            const categories = channels?.[DiscordChannelType.GUILD_CATEGORY];
+            let lastCategoryNotRendered: string | undefined = undefined;
+
+            if (!categories) {
+                return returnValue;
+            }
+            // categories[0] is the uncategorized category
+            if (
+                items[0]?.type !== "section" &&
+                categories.length > 1 &&
+                !items.some((item) => item.type === "section" && item.anchorId && item.anchorId === categories[1].channel.id)
+            ) {
+                for (let i = 1; i < categories.length; i++) {
+                    if (items.some((item) => item.type === "section" && item.anchorId && item.anchorId === categories[i].channel.id)) {
+                        lastCategoryNotRendered = categories[i - 1]?.channel.id;
+                        break;
+                    }
+                }
+            }
+
+            if (lastCategoryNotRendered) {
+                const nextSection = items.find((item) => item.type === "section");
+
+                items.unshift({
+                    anchorId: lastCategoryNotRendered,
+                    listIndex: 0,
+                    offsetTop: 0,
+                    section: nextSection ? nextSection.section - 1 : 5,
+                    type: "section"
+                });
+            }
+            return returnValue;
+        });
     }
 
     stop() {
+        BdApi.Patcher.unpatchAll(NAME);
         this._unsubscribeEvents();
         this._removeCategoriesStyle();
 
