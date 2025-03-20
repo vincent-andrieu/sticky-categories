@@ -1,7 +1,7 @@
 /**
  * @name StickyCategories
  * @author gassastsina
- * @description Make categories sticky in the channel list. Add a clickable area above categories to scroll to it.
+ * @description Make categories sticky in the channel list.
  * @version 1.0.0
  * @authorId 292388871381975040
  * @source https://github.com/vincent-andrieu/sticky-categories
