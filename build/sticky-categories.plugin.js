@@ -152,48 +152,6 @@ class StickyCategories {
         this._subscribeEvents();
         this._patchChannelsVirtualScroll();
     }
-    _patchChannelsVirtualScroll() {
-        const moduleFilter = BdApi.Webpack.Filters.byStrings("sections", "getScrollerState", "getAnchorId");
-        const module = BdApi.Webpack.getModule((module) => Object.values(module).some((subModule) => subModule.length === 1 && moduleFilter(subModule)));
-        const key = module ? Object.keys(module).find((key) => moduleFilter(module[key])) : undefined;
-        if (!key) {
-            return console.error(LOG_PREFIX, "Failed to find the module");
-        }
-        BdApi.Patcher.after(NAME, module, key, (_, _args, returnValue) => {
-            const items = returnValue.items;
-            const guildId = this._selectedGuildStore?.getGuildId();
-            if (!items.length || !guildId)
-                return returnValue;
-            const channels = this._guildChannelStore?.getChannels(guildId);
-            const categories = channels?.[DiscordChannelType.GUILD_CATEGORY];
-            let lastCategoryNotRendered = undefined;
-            if (!categories) {
-                return returnValue;
-            }
-            // categories[0] is the uncategorized category
-            if (items[0]?.type !== "section" &&
-                categories.length > 1 &&
-                !items.some((item) => item.type === "section" && item.anchorId && item.anchorId === categories[1].channel.id)) {
-                for (let i = 1; i < categories.length; i++) {
-                    if (items.some((item) => item.type === "section" && item.anchorId && item.anchorId === categories[i].channel.id)) {
-                        lastCategoryNotRendered = categories[i - 1]?.channel.id;
-                        break;
-                    }
-                }
-            }
-            if (lastCategoryNotRendered) {
-                const nextSection = items.find((item) => item.type === "section");
-                items.unshift({
-                    anchorId: lastCategoryNotRendered,
-                    listIndex: 0,
-                    offsetTop: 0,
-                    section: nextSection ? nextSection.section - 1 : 5,
-                    type: "section"
-                });
-            }
-            return returnValue;
-        });
-    }
     stop() {
         BdApi.Patcher.unpatchAll(NAME);
         this._unsubscribeEvents();
@@ -282,6 +240,48 @@ class StickyCategories {
         this.observer.observe(containerElement, {
             childList: true,
             subtree: true
+        });
+    }
+    _patchChannelsVirtualScroll() {
+        const moduleFilter = BdApi.Webpack.Filters.byStrings("sections", "getScrollerState", "getAnchorId");
+        const module = BdApi.Webpack.getModule((module) => Object.values(module).some((subModule) => subModule.length === 1 && moduleFilter(subModule)));
+        const key = module ? Object.keys(module).find((key) => moduleFilter(module[key])) : undefined;
+        if (!key) {
+            return console.error(LOG_PREFIX, "Failed to find the module");
+        }
+        BdApi.Patcher.after(NAME, module, key, (_, _args, returnValue) => {
+            const items = returnValue.items;
+            const guildId = this._selectedGuildStore?.getGuildId();
+            if (!items.length || !guildId)
+                return returnValue;
+            const channels = this._guildChannelStore?.getChannels(guildId);
+            const categories = channels?.[DiscordChannelType.GUILD_CATEGORY];
+            let lastCategoryNotRendered = undefined;
+            if (!categories) {
+                return returnValue;
+            }
+            // categories[0] is the uncategorized category
+            if (items[0]?.type !== "section" &&
+                categories.length > 1 &&
+                !items.some((item) => item.type === "section" && item.anchorId && item.anchorId === categories[1].channel.id)) {
+                for (let i = 1; i < categories.length; i++) {
+                    if (items.some((item) => item.type === "section" && item.anchorId && item.anchorId === categories[i].channel.id)) {
+                        lastCategoryNotRendered = categories[i - 1]?.channel.id;
+                        break;
+                    }
+                }
+            }
+            if (lastCategoryNotRendered) {
+                const nextSection = items.find((item) => item.type === "section");
+                items.unshift({
+                    anchorId: lastCategoryNotRendered,
+                    listIndex: 0,
+                    offsetTop: 0,
+                    section: nextSection ? nextSection.section - 1 : 5,
+                    type: "section"
+                });
+            }
+            return returnValue;
         });
     }
     // Destructors
