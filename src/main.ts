@@ -53,6 +53,10 @@ export default class StickyCategories {
         scrollerContainer?.addEventListener("scroll", (event) => this._onScroll(event, scrollerContainer));
     }
 
+    private _isCategorySticky(category: HTMLElement) {
+        return category.style.position === "sticky";
+    }
+
     private _onScroll(_event: Event, container: HTMLElement) {
         const unreadBarIcon = document.querySelector('[class*="unreadIcon_"]');
 
@@ -241,23 +245,31 @@ export default class StickyCategories {
         switch (event.type) {
             case "CHANNEL_SELECT":
                 this._removeCategoriesStyle();
-                await new Promise((resolve) => setTimeout(resolve, 2000));
+                const retry = 40; // 4 seconds
 
-                const timeout = Date.now() + 10_000;
-                let categories = document.querySelectorAll<HTMLElement>(CATEGORIES_SELECTOR);
+                for (let i = 0; i < retry; i++) {
+                    this._onChannelSelect();
+                    await new Promise((resolve) => setTimeout(resolve, 100));
 
-                while (Date.now() < timeout && categories.length === 0) {
-                    await new Promise((resolve) => setTimeout(resolve, 500));
-                    categories = document.querySelectorAll<HTMLElement>(CATEGORIES_SELECTOR);
+                    const categories = document.querySelectorAll<HTMLElement>(CATEGORIES_SELECTOR);
+                    if (new Array(...categories).every((category) => this._isCategorySticky(category))) {
+                        break;
+                    }
                 }
-                if (categories.length > 0) {
-                    this._addCategoriesStyles();
-                }
-                this._setupObserver();
                 break;
+
             default:
                 console.warn(LOG_PREFIX, "Unknown event", event);
                 break;
         }
+    }
+
+    private _onChannelSelect() {
+        const categories = document.querySelectorAll<HTMLElement>(CATEGORIES_SELECTOR);
+
+        if (categories.length > 0) {
+            this._addCategoriesStyles();
+        }
+        this._setupObserver();
     }
 }

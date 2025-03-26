@@ -170,6 +170,9 @@ class StickyCategories {
         const scrollerContainer = document.getElementById(CONTAINER_ID);
         scrollerContainer?.addEventListener("scroll", (event) => this._onScroll(event, scrollerContainer));
     }
+    _isCategorySticky(category) {
+        return category.style.position === "sticky";
+    }
     _onScroll(_event, container) {
         const unreadBarIcon = document.querySelector('[class*="unreadIcon_"]');
         if (unreadBarIcon) {
@@ -323,22 +326,27 @@ class StickyCategories {
         switch (event.type) {
             case "CHANNEL_SELECT":
                 this._removeCategoriesStyle();
-                await new Promise((resolve) => setTimeout(resolve, 2000));
-                const timeout = Date.now() + 10_000;
-                let categories = document.querySelectorAll(CATEGORIES_SELECTOR);
-                while (Date.now() < timeout && categories.length === 0) {
-                    await new Promise((resolve) => setTimeout(resolve, 500));
-                    categories = document.querySelectorAll(CATEGORIES_SELECTOR);
+                const retry = 40; // 4 seconds
+                for (let i = 0; i < retry; i++) {
+                    this._onChannelSelect();
+                    await new Promise((resolve) => setTimeout(resolve, 100));
+                    const categories = document.querySelectorAll(CATEGORIES_SELECTOR);
+                    if (new Array(...categories).every((category) => this._isCategorySticky(category))) {
+                        break;
+                    }
                 }
-                if (categories.length > 0) {
-                    this._addCategoriesStyles();
-                }
-                this._setupObserver();
                 break;
             default:
                 console.warn(LOG_PREFIX, "Unknown event", event);
                 break;
         }
+    }
+    _onChannelSelect() {
+        const categories = document.querySelectorAll(CATEGORIES_SELECTOR);
+        if (categories.length > 0) {
+            this._addCategoriesStyles();
+        }
+        this._setupObserver();
     }
 }
 
