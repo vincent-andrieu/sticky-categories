@@ -163,8 +163,8 @@ class StickyCategories {
             category.style.setProperty("position", "sticky");
             category.style.setProperty("top", "0");
             category.style.setProperty("z-index", "10");
-            category.style.setProperty("background-color", "var(--background-secondary)");
-            category.style.setProperty("box-shadow", "0 5px 8px -2px var(--background-secondary)");
+            category.style.setProperty("background-color", "var(--background-tertiary)");
+            category.style.setProperty("box-shadow", "0 5px 8px -2px var(--background-tertiary)");
             this._addClickHandlers(category);
         });
         const scrollerContainer = document.getElementById(CONTAINER_ID);
