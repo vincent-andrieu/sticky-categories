@@ -186,14 +186,17 @@ export default class StickyCategories {
 
             if (lastCategoryNotRendered) {
                 const nextSection = items.find((item) => item.type === "section");
+                const section = nextSection ? nextSection.section - 1 : 5;
 
-                items.unshift({
-                    anchorId: lastCategoryNotRendered,
-                    listIndex: 0,
-                    offsetTop: 0,
-                    section: nextSection ? nextSection.section - 1 : 5,
-                    type: "section"
-                });
+                if (section >= 4) {
+                    items.unshift({
+                        anchorId: lastCategoryNotRendered,
+                        listIndex: 0,
+                        offsetTop: 0,
+                        section,
+                        type: "section"
+                    });
+                }
             }
             return returnValue;
         });
