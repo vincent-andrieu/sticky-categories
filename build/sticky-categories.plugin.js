@@ -247,7 +247,7 @@ class StickyCategories {
     }
     _patchChannelsVirtualScroll() {
         const moduleFilter = BdApi.Webpack.Filters.byStrings("sections", "getScrollerState", "getAnchorId");
-        const module = BdApi.Webpack.getModule((module) => Object.values(module).some((subModule) => subModule.length === 1 && moduleFilter(subModule)));
+        const module = BdApi.Webpack.getModule((module) => Object.values(module).some((subModule) => subModule?.length === 1 && moduleFilter(subModule)));
         const key = module ? Object.keys(module).find((key) => moduleFilter(module[key])) : undefined;
         if (!key) {
             return console.error(LOG_PREFIX, "Failed to find the module");

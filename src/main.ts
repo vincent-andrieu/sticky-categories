@@ -146,7 +146,7 @@ export default class StickyCategories {
     private _patchChannelsVirtualScroll() {
         const moduleFilter = BdApi.Webpack.Filters.byStrings("sections", "getScrollerState", "getAnchorId");
         const module = BdApi.Webpack.getModule<Record<string, Function>>((module) =>
-            Object.values<Function>(module).some((subModule) => subModule.length === 1 && moduleFilter(subModule))
+            Object.values<Function>(module).some((subModule) => subModule?.length === 1 && moduleFilter(subModule))
         );
         const key = module ? Object.keys(module).find((key) => moduleFilter(module[key])) : undefined;
 
