@@ -24,7 +24,7 @@ export default {
             " * @version 1.0.0",
             " * @authorId 292388871381975040",
             " * @source https://github.com/vincent-andrieu/sticky-categories",
-            " * @updateUrl https://raw.githubusercontent.com/vincent-andrieu/sticky-categories/refs/heads/main/build/sticky-categories.plugin.js",
+            " * @updateUrl https://raw.githubusercontent.com/vincent-andrieu/sticky-categories/refs/heads/add-check-updates/build/sticky-categories.plugin.js",
             " */"
         ].join("\n") + '\n')
     ]
