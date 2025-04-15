@@ -1,9 +1,10 @@
-import { DiscordChannelType } from "./constants";
+import { DiscordChannelType, LOG_PREFIX } from "./constants";
+import { getConfig, getSetting, SETTING_CHECK_UPDATES } from "./settings";
 import { DiscordEvent, DiscordEventType, DiscordFluxDispatcher } from "./types";
+import { LogLevel } from "./types/stickyCategories";
 import { GuildChannelStore, SelectedGuildStore } from "./types/stores";
+import { UpdateManager } from "./updates";
 
-const NAME = "StickyCategories";
-const LOG_PREFIX = `[${NAME}]`;
 const CONTAINER_ID = "channels";
 const PARENT_SELECTOR = 'ul[class^="content_"]';
 const CATEGORIES_SELECTOR = '[class*="containerDefault_"][draggable="true"]';
@@ -17,25 +18,52 @@ export default class StickyCategories {
     private _listeningEvents: Array<DiscordEventType> = ["CHANNEL_SELECT"];
     private clickHandlers: Map<HTMLElement, (e: MouseEvent) => void> = new Map();
 
+    private _updateManager?: UpdateManager;
+
     start() {
         console.warn(LOG_PREFIX, "Started");
         this._guildChannelStore = BdApi.Webpack.getStore<GuildChannelStore>("GuildChannelStore");
         this._selectedGuildStore = BdApi.Webpack.getStore<SelectedGuildStore>("SelectedGuildStore");
         this._fluxDispatcher = BdApi.Webpack.getByKeys("actionLogger");
 
+        this._updateManager = new UpdateManager(this._log.bind(this));
+
         this._addCategoriesStyles();
         this._setupObserver();
 
         this._subscribeEvents();
         this._patchChannelsVirtualScroll();
+
+        if (getSetting<boolean>(SETTING_CHECK_UPDATES)) {
+            this._updateManager.ask();
+        }
     }
 
     stop() {
-        BdApi.Patcher.unpatchAll(NAME);
+        BdApi.Patcher.unpatchAll(getConfig().name);
         this._unsubscribeEvents();
         this._removeCategoriesStyle();
+        this._updateManager?.cancel();
 
         console.warn(LOG_PREFIX, "Stopped");
+    }
+
+    getSettingsPanel() {
+        return BdApi.UI.buildSettingsPanel({
+            settings: getConfig().settings,
+            onChange: (_category, id, value) => BdApi.Data.save(getConfig().name, id, value)
+        });
+    }
+
+    private _log(message: string, type: LogLevel = "error"): void {
+        const logMessage = `${LOG_PREFIX} ${message}`;
+
+        BdApi.UI.showToast(logMessage, { type: type === "warn" ? "warning" : type });
+        if (type !== "success") {
+            console[type](logMessage);
+        } else {
+            console.log(logMessage);
+        }
     }
 
     private _addCategoriesStyles(categories: NodeListOf<HTMLElement> | HTMLElement[] = document.querySelectorAll<HTMLElement>(CATEGORIES_SELECTOR)) {
@@ -153,7 +181,7 @@ export default class StickyCategories {
         if (!key) {
             return console.error(LOG_PREFIX, "Failed to find the module");
         }
-        BdApi.Patcher.after(NAME, module, key, (_, _args, returnValue) => {
+        BdApi.Patcher.after(getConfig().name, module, key, (_, _args, returnValue) => {
             const items: Array<{
                 anchorId: string;
                 listIndex: number;
