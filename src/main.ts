@@ -24,7 +24,7 @@ export default class StickyCategories {
         console.warn(LOG_PREFIX, "Started");
         this._guildChannelStore = BdApi.Webpack.getStore<GuildChannelStore>("GuildChannelStore");
         this._selectedGuildStore = BdApi.Webpack.getStore<SelectedGuildStore>("SelectedGuildStore");
-        this._fluxDispatcher = BdApi.Webpack.getByKeys("actionLogger");
+        this._fluxDispatcher = BdApi.Webpack.getByKeys("dispatch", "subscribe", { searchExports: true });
 
         this._updateManager = new UpdateManager(this._log.bind(this));
 
