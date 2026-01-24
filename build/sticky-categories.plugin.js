@@ -43,7 +43,7 @@ function getSetting(id, settingsList = getConfig().settings) {
 
 const LOG_PREFIX = `[${getConfig().name}]`;
 const PLUGIN_FILE_NAME = "sticky-categories.plugin.js";
-const GITHUB_BRANCH = "add-check-updates";
+const GITHUB_BRANCH = "main";
 const GITHUB_SOURCE = `https://raw.githubusercontent.com/vincent-andrieu/sticky-categories/refs/heads/${GITHUB_BRANCH}/build/${PLUGIN_FILE_NAME}`;
 var DiscordChannelType;
 (function (DiscordChannelType) {

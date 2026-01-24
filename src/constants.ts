@@ -2,7 +2,7 @@ import { getConfig } from "./settings";
 
 export const LOG_PREFIX = `[${getConfig().name}]`;
 export const PLUGIN_FILE_NAME = "sticky-categories.plugin.js";
-export const GITHUB_BRANCH = "add-check-updates";
+export const GITHUB_BRANCH = "main";
 export const GITHUB_SOURCE = `https://raw.githubusercontent.com/vincent-andrieu/sticky-categories/refs/heads/${GITHUB_BRANCH}/build/${PLUGIN_FILE_NAME}`;
 
 export enum DiscordChannelType {
