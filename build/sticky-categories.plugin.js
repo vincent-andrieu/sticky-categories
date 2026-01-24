@@ -5,10 +5,46 @@
  * @version 1.0.0
  * @authorId 292388871381975040
  * @source https://github.com/vincent-andrieu/sticky-categories
- * @updateUrl https://raw.githubusercontent.com/vincent-andrieu/sticky-categories/refs/heads/main/build/sticky-categories.plugin.js
+ * @updateUrl https://raw.githubusercontent.com/vincent-andrieu/sticky-categories/refs/heads/add-check-updates/build/sticky-categories.plugin.js
  */
 'use strict';
 
+const name = "StickyCategories";
+const SETTING_CHECK_UPDATES = "checkUpdates";
+function getConfig() {
+    return {
+        name,
+        settings: [
+            {
+                type: "switch",
+                id: SETTING_CHECK_UPDATES,
+                name: "Check for updates",
+                note: "Check for updates on plugin startup",
+                value: BdApi.Data.load(name, SETTING_CHECK_UPDATES) ?? true,
+                defaultValue: true
+            }
+        ]
+    };
+}
+function getSetting(id, settingsList = getConfig().settings) {
+    for (const setting of settingsList) {
+        if (setting.type === "category") {
+            const result = getSetting(id, setting.settings);
+            if (result !== undefined) {
+                return result;
+            }
+        }
+        else if (setting.id === id) {
+            return setting.value;
+        }
+    }
+    return undefined;
+}
+
+const LOG_PREFIX = `[${getConfig().name}]`;
+const PLUGIN_FILE_NAME = "sticky-categories.plugin.js";
+const GITHUB_BRANCH = "add-check-updates";
+const GITHUB_SOURCE = `https://raw.githubusercontent.com/vincent-andrieu/sticky-categories/refs/heads/${GITHUB_BRANCH}/build/${PLUGIN_FILE_NAME}`;
 var DiscordChannelType;
 (function (DiscordChannelType) {
     DiscordChannelType[DiscordChannelType["DM"] = 1] = "DM";
@@ -129,8 +165,102 @@ var DiscordComponentVisualState;
     DiscordComponentVisualState[DiscordComponentVisualState["DISABLED"] = 2] = "DISABLED";
 })(DiscordComponentVisualState || (DiscordComponentVisualState = {}));
 
-const NAME = "StickyCategories";
-const LOG_PREFIX = `[${NAME}]`;
+function getRuntimeRequire(packageName) {
+    try {
+        const nodeRequire = window.require;
+        return nodeRequire(packageName);
+    }
+    catch (error) {
+        console.error(`Failed to require package "${packageName}" at runtime:`, error);
+        return null;
+    }
+}
+
+class UpdateManager {
+    _log;
+    _localPluginFilePath;
+    _remotePlugin;
+    _closeUpdateNotice;
+    _fs;
+    constructor(_log) {
+        this._log = _log;
+        const path = getRuntimeRequire("path");
+        this._fs = getRuntimeRequire("fs");
+        this._localPluginFilePath = path.join(BdApi.Plugins.folder, PLUGIN_FILE_NAME);
+    }
+    async ask() {
+        const shouldUpdate = await this.check();
+        if (shouldUpdate) {
+            this._showUpdateNotice();
+        }
+    }
+    async check() {
+        const [remotePlugin, localPlugin] = await Promise.all([this._getRemotePlugin(), this._getLocalPlugin()]);
+        return remotePlugin !== localPlugin;
+    }
+    async update() {
+        try {
+            await new Promise((resolve, reject) => {
+                if (!this._remotePlugin) {
+                    reject(new Error("No remote plugin found"));
+                    return;
+                }
+                this._fs.writeFile(this._localPluginFilePath, this._remotePlugin, (error) => (error ? reject(error) : resolve()));
+            });
+            this.cancel();
+            this._log("Updated successfully", "success");
+        }
+        catch (error) {
+            this._log("Failed to update plugin", "error");
+            throw error;
+        }
+    }
+    cancel() {
+        if (this._closeUpdateNotice) {
+            this._closeUpdateNotice();
+            this._closeUpdateNotice = undefined;
+        }
+    }
+    async _getLocalPlugin() {
+        try {
+            const currentPluginBuffer = await new Promise((resolve, reject) => {
+                this._fs.readFile(this._localPluginFilePath, "utf8", (error, data) => error ? reject(error) : resolve(data));
+            });
+            return currentPluginBuffer.toString();
+        }
+        catch (error) {
+            this._log("Failed to read current plugin", "error");
+            throw error;
+        }
+    }
+    async _getRemotePlugin() {
+        try {
+            const response = await fetch(GITHUB_SOURCE);
+            if (!response.ok) {
+                throw new Error("Failed to fetch remote plugin");
+            }
+            const data = await response.text();
+            this._remotePlugin = data;
+            return data;
+        }
+        catch (error) {
+            this._log("Failed to fetch remote plugin", "error");
+            throw error;
+        }
+    }
+    _showUpdateNotice() {
+        this._closeUpdateNotice = BdApi.UI.showNotice(`${LOG_PREFIX} New version available`, {
+            type: "info",
+            buttons: [
+                {
+                    label: "Update",
+                    onClick: () => this.update()
+                }
+            ]
+        });
+    }
+}
+
 const CONTAINER_ID = "channels";
 const PARENT_SELECTOR = 'ul[class^="content_"]';
 const CATEGORIES_SELECTOR = '[class*="containerDefault_"][draggable="true"]';
@@ -142,29 +272,51 @@ class StickyCategories {
     _onEventSubscriptionCb = this._onEvent.bind(this);
     _listeningEvents = ["CHANNEL_SELECT"];
     clickHandlers = new Map();
+    _updateManager;
     start() {
         console.warn(LOG_PREFIX, "Started");
         this._guildChannelStore = BdApi.Webpack.getStore("GuildChannelStore");
         this._selectedGuildStore = BdApi.Webpack.getStore("SelectedGuildStore");
         this._fluxDispatcher = BdApi.Webpack.getByKeys("dispatch", "subscribe", { searchExports: true });
+        this._updateManager = new UpdateManager(this._log.bind(this));
         this._addCategoriesStyles();
         this._setupObserver();
         this._subscribeEvents();
         this._patchChannelsVirtualScroll();
+        if (getSetting(SETTING_CHECK_UPDATES)) {
+            this._updateManager.ask();
+        }
     }
     stop() {
-        BdApi.Patcher.unpatchAll(NAME);
+        BdApi.Patcher.unpatchAll(getConfig().name);
         this._unsubscribeEvents();
         this._removeCategoriesStyle();
+        this._updateManager?.cancel();
         console.warn(LOG_PREFIX, "Stopped");
+    }
+    getSettingsPanel() {
+        return BdApi.UI.buildSettingsPanel({
+            settings: getConfig().settings,
+            onChange: (_category, id, value) => BdApi.Data.save(getConfig().name, id, value)
+        });
+    }
+    _log(message, type = "error") {
+        const logMessage = `${LOG_PREFIX} ${message}`;
+        BdApi.UI.showToast(logMessage, { type: type === "warn" ? "warning" : type });
+        if (type !== "success") {
+            console[type](logMessage);
+        }
+        else {
+            console.log(logMessage);
+        }
     }
     _addCategoriesStyles(categories = document.querySelectorAll(CATEGORIES_SELECTOR)) {
         categories.forEach((category) => {
             category.style.setProperty("position", "sticky");
             category.style.setProperty("top", "0");
             category.style.setProperty("z-index", "10");
-            category.style.setProperty("background-color", "var(--background-tertiary)");
-            category.style.setProperty("box-shadow", "0 5px 8px -2px var(--background-tertiary)");
+            category.style.setProperty("background-color", "var(--background-base-lowest)");
+            category.style.setProperty("box-shadow", "0 5px 8px -2px var(--background-base-lowest)");
             this._addClickHandlers(category);
         });
         const scrollerContainer = document.getElementById(CONTAINER_ID);
@@ -252,7 +404,7 @@ class StickyCategories {
         if (!key) {
             return console.error(LOG_PREFIX, "Failed to find the module");
         }
-        BdApi.Patcher.after(NAME, module, key, (_, _args, returnValue) => {
+        BdApi.Patcher.after(getConfig().name, module, key, (_, _args, returnValue) => {
             const items = returnValue.items;
             const guildId = this._selectedGuildStore?.getGuildId();
             if (!items.length || !guildId)

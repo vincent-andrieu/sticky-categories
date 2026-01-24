@@ -31,6 +31,7 @@ type React = {
 };
 
 type Plugins = {
+    folder: string;
     disable(id: string): void;
 }
 
